@@ -1,6 +1,8 @@
 import React, { useContext, useState, useEffect, useCallback } from 'react'
 import useLocalStorage from '../hooks/useLocalStorage';
 import { useContacts } from './ContactsProvider';
+import { useSocket } from "./SocketProvider";
+import arrayEquality from "../utils/ArrayEquality";
 
 
 const ConversationsContext = React.createContext()
@@ -13,6 +15,7 @@ export function ConversationsProvider({ id, children }) {
   const [conversations, setConversations] = useLocalStorage('conversations', [])
   const [selectedConversationIndex, setSelectedConversationIndex] = useState(0)
   const { contacts } = useContacts()
+  const socket  = useSocket()
 
 
   function createConversation(recipients) {
@@ -51,10 +54,17 @@ export function ConversationsProvider({ id, children }) {
     })
   }, [setConversations])
 
+  useEffect(() => {
+    if (socket == null) return
+    socket.on('receive-message', addMessageToConversation)
+
+    return () => socket.off('receive-message')
+  }, [socket, addMessageToConversation]);
+
 
 
   function sendMessage(recipients, text) {
-
+    socket.emit('send-message', { recipients, text })
     addMessageToConversation({ recipients, text, sender: id })
   }
 
@@ -83,7 +93,7 @@ export function ConversationsProvider({ id, children }) {
 
   const value = {
     conversations: formattedConversations,
-    selectedConversation: formattedConversations[selectedConversationIndex],
+    selectedConversation: formattedConversations? formattedConversations[selectedConversationIndex] : null,
     sendMessage,
     selectConversationIndex: setSelectedConversationIndex,
     createConversation
@@ -96,13 +106,3 @@ export function ConversationsProvider({ id, children }) {
   )
 }
 
-function arrayEquality(a, b) {
-  if (a.length !== b.length) return false
-
-  a.sort()
-  b.sort()
-
-  return a.every((element, index) => {
-    return element === b[index]
-  })
-}
